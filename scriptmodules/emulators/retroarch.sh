@@ -12,7 +12,7 @@
 rp_module_id="retroarch"
 rp_module_desc="RetroArch - frontend to the libretro emulator cores - required by all lr-* emulators"
 rp_module_licence="GPL3 https://raw.githubusercontent.com/libretro/RetroArch/master/COPYING"
-rp_module_repo="git https://github.com/retropie/RetroArch.git retropie-v1.19.0"
+rp_module_repo="git https://github.com/libretro/RetroArch.git v1.22.2"
 rp_module_section="core"
 
 function depends_retroarch() {
@@ -81,7 +81,7 @@ function update_shaders_retroarch() {
     local branch=""
     isPlatform "rpi" && branch="rpi"
     # remove if not git repository for fresh checkout
-    [[ ! -d "$dir/.git" ]] && rm -rf "$dir"
+    # [[ ! -d "$dir/.git" ]] && rm -rf "$dir"
     gitPullOrClone "$dir" https://github.com/RetroPie/common-shaders.git "$branch"
     chown -R "$__user":"$__group" "$dir"
 }
@@ -89,7 +89,7 @@ function update_shaders_retroarch() {
 function update_overlays_retroarch() {
     local dir="$configdir/all/retroarch/overlay"
     # remove if not a git repository for fresh checkout
-    [[ ! -d "$dir/.git" ]] && rm -rf "$dir"
+    # [[ ! -d "$dir/.git" ]] && rm -rf "$dir"
     gitPullOrClone "$dir" https://github.com/libretro/common-overlays.git
     chown -R "$__user":"$__group" "$dir"
 }
@@ -102,7 +102,7 @@ function update_joypad_autoconfigs_retroarch() {
 function update_assets_retroarch() {
     local dir="$configdir/all/retroarch/assets"
     # remove if not a git repository for fresh checkout
-    [[ ! -d "$dir/.git" ]] && rm -rf "$dir"
+    # [[ ! -d "$dir/.git" ]] && rm -rf "$dir"
     gitPullOrClone "$dir" https://github.com/libretro/retroarch-assets.git
     chown -R "$__user":"$__group" "$dir"
 }
@@ -110,7 +110,7 @@ function update_assets_retroarch() {
 function update_core_info_retroarch() {
     local dir="$configdir/all/retroarch/cores"
     # remove if not a git repository and do a fresh checkout
-    [[ ! -d "$dir/.git" ]] && rm -fr "$dir"
+    # [[ ! -d "$dir/.git" ]] && rm -fr "$dir"
     # remove our locally generated `.info` files, just in case upstream adds them
     [[ -d "$dir/.git" ]] && git -C "$dir" clean -q -f "*.info"
     gitPullOrClone "$dir" https://github.com/libretro/libretro-core-info.git
