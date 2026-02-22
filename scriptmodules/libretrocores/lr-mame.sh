@@ -37,6 +37,12 @@ function depends_lr-mame() {
 
 function sources_lr-mame() {
     gitPullOrClone
+
+    # If a custom arcade.flt is provided alongside this module, use it to
+    # override the default filter list in the MAME tree.
+    if [[ -f "$md_data/arcade.flt" ]]; then
+        cp "$md_data/arcade.flt" "$md_build/src/mame/arcade.flt"
+    fi
 }
 
 function build_lr-mame() {
