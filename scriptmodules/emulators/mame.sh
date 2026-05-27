@@ -131,7 +131,7 @@ function build_mame() {
         rpSwap on 8192
     fi
 
-    local params=(NOWERROR=1 ARCHOPTS="-U_FORTIFY_SOURCE -Wl,-s" PYTHON_EXECUTABLE=python3 OPTIMIZE=2 USE_SYSTEM_LIB_FLAC=1)
+    local params=(NOWERROR=1 ARCHOPTS="-U_FORTIFY_SOURCE -Wl,-s" PYTHON_EXECUTABLE=python3 OPTIMIZE=2 USE_SYSTEM_LIB_FLAC=1 SUBTARGET=arcade)
     isPlatform "x11" && params+=(USE_QTDEBUG=1) || params+=(USE_QTDEBUG=0)
 
     # array for storing ARCHOPTS_CXX parameters
@@ -165,7 +165,7 @@ function build_mame() {
     fi
 
     rpSwap off
-    md_ret_require="$md_build/mame"
+    md_ret_require="$md_build/mamearcade"
 }
 
 function install_mame() {
@@ -178,7 +178,7 @@ function install_mame() {
         'hlsl'
         'ini'
         'language'
-        'mame'
+        'mamearcade'
         'plugins'
         'roms'
         'samples'
@@ -279,8 +279,8 @@ function configure_mame() {
         rm "$temp_ini_hiscore"
     fi
 
-    addEmulator 0 "$md_id" "arcade" "$md_inst/mame %BASENAME%"
-    addEmulator 1 "$md_id" "$system" "$md_inst/mame %BASENAME%"
+    addEmulator 0 "$md_id" "arcade" "$md_inst/mamearcade %BASENAME%"
+    addEmulator 1 "$md_id" "$system" "$md_inst/mamearcade %BASENAME%"
 
     addSystem "arcade"
     addSystem "$system"
