@@ -9,6 +9,20 @@
 # at https://raw.githubusercontent.com/RetroPie/RetroPie-Setup/master/LICENSE.md
 #
 
+# ============================================================================
+# IvarArcade modification — mapdevice duplicate-ID fix
+# Upstream: https://github.com/RetroPie/RetroPie-Setup/blob/master/scriptmodules/emulators/mame.sh
+# Patch reference: IvarArcade/docs/mame-mapdevice-duplicate-id-fix.md
+#
+# Changes vs upstream:
+#   1. sources_mame(): after gitPullOrClone, applies the two-line mapdevice fix
+#      via sed, prints a summary, then pauses for your verification before the build.
+#   2. install_mame(): after copying build artifacts, saves the two patched source
+#      files to /home/danc/mame-src-patched/ for future reference.
+#   3. __keep_sources=1: tells RetroPie-Setup NOT to delete the build directory
+#      after install, leaving the full MAME source tree in place.
+# ============================================================================
+
 rp_module_id="mame"
 rp_module_desc="MAME emulator"
 rp_module_help="ROM Extensions: .zip .7z\n\nCopy your MAME roms to either $romdir/mame or\n$romdir/arcade"
@@ -16,6 +30,10 @@ rp_module_licence="GPL2 https://raw.githubusercontent.com/mamedev/mame/master/CO
 rp_module_repo="git https://github.com/mamedev/mame.git :_get_branch_mame"
 rp_module_section="exp"
 rp_module_flags="!mali !armv6 !:\$__gcc_version:-lt:7 nodistcc"
+
+# IvarArcade: preserve the build directory after install so the patched source
+# tree remains at ~/RetroPie-Setup/tmp/build/mame for inspection and re-use.
+__keep_sources=1
 
 function _get_branch_mame() {
     # starting with 0.265, GCC 10.3 or later is required for full C++17 support
@@ -40,6 +58,69 @@ function sources_mame() {
     gitPullOrClone
     # lzma assumes hardware crc support on arm which breaks when building on armv7
     isPlatform "armv7" && applyPatch "$md_data/lzma_armv7_crc.diff"
+
+    # If a custom arcade.flt is provided alongside this module, use it to
+    # override the default filter list in the MAME tree.
+    if [[ -f "$md_data/arcade.flt" ]]; then
+        cp "$md_data/arcade.flt" "$md_build/src/mame/arcade.flt"
+    fi
+
+    # =====================================================================
+    # IvarArcade: Apply mapdevice duplicate-ID fix
+    # See: IvarArcade/docs/mame-mapdevice-duplicate-id-fix.md
+    #
+    # Two source files must be changed:
+    #   src/emu/input.h    — change devicemap_table type from map to vector<pair>
+    #   src/emu/ioport.cpp — change emplace() to emplace_back()
+    # =====================================================================
+    printHeading "IvarArcade: applying mapdevice duplicate-ID fix..."
+
+    local patch_ok=1
+
+    # -- Change 1: src/emu/input.h ----------------------------------------
+    local input_h="$md_build/src/emu/input.h"
+    if grep -q "transparent_string_map<std::string, std::string>" "$input_h"; then
+        sed -i \
+            's/using devicemap_table = util::transparent_string_map<std::string, std::string>;/using devicemap_table = std::vector<std::pair<std::string, std::string>>;/' \
+            "$input_h"
+        echo "  [OK] src/emu/input.h: devicemap_table -> std::vector<std::pair<std::string, std::string>>"
+    else
+        echo "  [!!] src/emu/input.h: PATTERN NOT FOUND — automatic patch skipped!"
+        echo "       Expected line:  using devicemap_table = util::transparent_string_map<std::string, std::string>;"
+        echo "       Apply manually: $input_h"
+        patch_ok=0
+    fi
+
+    # -- Change 2: src/emu/ioport.cpp -------------------------------------
+    local ioport_cpp="$md_build/src/emu/ioport.cpp"
+    if grep -q "devicemap\.emplace(devicename, controllername)" "$ioport_cpp"; then
+        sed -i \
+            's/devicemap\.emplace(devicename, controllername);/devicemap.emplace_back(devicename, controllername);/' \
+            "$ioport_cpp"
+        echo "  [OK] src/emu/ioport.cpp: devicemap.emplace() -> emplace_back()"
+    else
+        echo "  [!!] src/emu/ioport.cpp: PATTERN NOT FOUND — automatic patch skipped!"
+        echo "       Expected line:  devicemap.emplace(devicename, controllername);"
+        echo "       Apply manually: $ioport_cpp"
+        patch_ok=0
+    fi
+
+    echo ""
+    echo "Source tree: $md_build"
+    echo ""
+    echo "Verify the applied changes:"
+    echo "  grep -n 'devicemap_table' $input_h"
+    echo "  grep -n 'emplace_back'    $ioport_cpp"
+    echo ""
+
+    if [[ "$patch_ok" -eq 0 ]]; then
+        echo "*** WARNING: one or more patches were NOT applied automatically. ***"
+        echo "    Apply them manually in $md_build/src/emu/ before continuing."
+        echo "    See IvarArcade/docs/mame-mapdevice-duplicate-id-fix.md for the exact changes."
+        echo ""
+    fi
+
+    read -rp "Press Enter to start the build, or Ctrl+C to abort and fix manually... "
 }
 
 function build_mame() {
@@ -104,6 +185,23 @@ function install_mame() {
         'uismall.bdf'
         'COPYING'
     )
+    # =====================================================================
+    # IvarArcade: save the two patched source files to a permanent location.
+    # The full source tree is preserved in $md_build via __keep_sources=1,
+    # but also explicitly copy the two changed files in case __keep_sources
+    # behaviour differs across RetroPie-Setup versions.
+    # =====================================================================
+    local src_save="/home/danc/mame-src-patched"
+    echo "IvarArcade: saving patched source files to $src_save ..."
+    mkdir -p "$src_save/src/emu"
+    cp "$md_build/src/emu/input.h"    "$src_save/src/emu/"
+    cp "$md_build/src/emu/ioport.cpp" "$src_save/src/emu/"
+    echo "  Saved: $src_save/src/emu/input.h"
+    echo "  Saved: $src_save/src/emu/ioport.cpp"
+
+    # Belt-and-suspenders: also set __keep_sources here (it was set at module
+    # scope above, but set it again immediately before the framework cleanup check).
+    __keep_sources=1
 }
 
 function configure_mame() {
