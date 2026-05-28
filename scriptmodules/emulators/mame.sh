@@ -21,6 +21,8 @@
 #      files to /home/danc/mame-src-patched/ for future reference.
 #   3. __keep_sources=1: tells RetroPie-Setup NOT to delete the build directory
 #      after install, leaving the full MAME source tree in place.
+#   4. IVAR_MAME_PROFILE=full|arcade selects whether to build the full MAME
+#      target or the stripped-down arcade-only target. Defaults to arcade.
 # ============================================================================
 
 rp_module_id="mame"
@@ -34,6 +36,27 @@ rp_module_flags="!mali !armv6 !:\$__gcc_version:-lt:7 nodistcc"
 # IvarArcade: preserve the build directory after install so the patched source
 # tree remains at ~/RetroPie-Setup/tmp/build/mame for inspection and re-use.
 __keep_sources=1
+
+function _ivar_mame_profile() {
+    local profile="${IVAR_MAME_PROFILE:-arcade}"
+
+    case "$profile" in
+        full|arcade)
+            echo "$profile"
+            ;;
+        *)
+            echo "Invalid IVAR_MAME_PROFILE='$profile'. Expected 'full' or 'arcade'." >&2
+            return 1
+            ;;
+    esac
+}
+
+function _ivar_mame_binary() {
+    local profile
+    profile="$(_ivar_mame_profile)" || return 1
+
+    [[ "$profile" == "full" ]] && echo "mame" || echo "mamearcade"
+}
 
 function _get_branch_mame() {
     # starting with 0.265, GCC 10.3 or later is required for full C++17 support
@@ -55,14 +78,23 @@ function depends_mame() {
 }
 
 function sources_mame() {
+    local profile
+    profile="$(_ivar_mame_profile)" || return 1
+
     gitPullOrClone
     # lzma assumes hardware crc support on arm which breaks when building on armv7
     isPlatform "armv7" && applyPatch "$md_data/lzma_armv7_crc.diff"
 
-    # If a custom arcade.flt is provided alongside this module, use it to
-    # override the default filter list in the MAME tree.
-    if [[ -f "$md_data/arcade.flt" ]]; then
+    # Only the stripped-down arcade build should override the upstream filter list.
+    if [[ "$profile" == "arcade" ]] && [[ -f "$md_data/arcade.flt" ]]; then
         cp "$md_data/arcade.flt" "$md_build/src/mame/arcade.flt"
+    fi
+
+    printHeading "IvarArcade: building MAME profile '$profile'"
+    if [[ "$profile" == "full" ]]; then
+        echo "  [OK] using upstream arcade.flt and full MAME target"
+    else
+        echo "  [OK] using custom arcade.flt and stripped-down arcade target"
     fi
 
     # =====================================================================
@@ -147,6 +179,12 @@ function sources_mame() {
 }
 
 function build_mame() {
+    local profile
+    local binary_name
+
+    profile="$(_ivar_mame_profile)" || return 1
+    binary_name="$(_ivar_mame_binary)" || return 1
+
     # More memory is required for 64bit platforms
     if isPlatform "64bit"; then
         rpSwap on 10240
@@ -154,7 +192,8 @@ function build_mame() {
         rpSwap on 8192
     fi
 
-    local params=(NOWERROR=1 ARCHOPTS="-U_FORTIFY_SOURCE -Wl,-s" PYTHON_EXECUTABLE=python3 OPTIMIZE=2 USE_SYSTEM_LIB_FLAC=1 SUBTARGET=arcade)
+    local params=(NOWERROR=1 ARCHOPTS="-U_FORTIFY_SOURCE -Wl,-s" PYTHON_EXECUTABLE=python3 OPTIMIZE=2 USE_SYSTEM_LIB_FLAC=1)
+    [[ "$profile" == "arcade" ]] && params+=(SUBTARGET=arcade)
     isPlatform "x11" && params+=(USE_QTDEBUG=1) || params+=(USE_QTDEBUG=0)
 
     # array for storing ARCHOPTS_CXX parameters
@@ -188,10 +227,14 @@ function build_mame() {
     fi
 
     rpSwap off
-    md_ret_require="$md_build/mamearcade"
+    md_ret_require="$md_build/$binary_name"
 }
 
 function install_mame() {
+    local binary_name
+
+    binary_name="$(_ivar_mame_binary)" || return 1
+
     md_ret_files=(
         'artwork'
         'bgfx'
@@ -201,7 +244,7 @@ function install_mame() {
         'hlsl'
         'ini'
         'language'
-        'mamearcade'
+        "$binary_name"
         'plugins'
         'roms'
         'samples'
@@ -229,6 +272,9 @@ function install_mame() {
 
 function configure_mame() {
     local system="mame"
+    local binary_name
+
+    binary_name="$(_ivar_mame_binary)" || return 1
 
     if [[ "$md_mode" == "install" ]]; then
         mkRomDir "arcade"
@@ -302,8 +348,8 @@ function configure_mame() {
         rm "$temp_ini_hiscore"
     fi
 
-    addEmulator 0 "$md_id" "arcade" "$md_inst/mamearcade %BASENAME%"
-    addEmulator 1 "$md_id" "$system" "$md_inst/mamearcade %BASENAME%"
+    addEmulator 0 "$md_id" "arcade" "$md_inst/$binary_name %BASENAME%"
+    addEmulator 1 "$md_id" "$system" "$md_inst/$binary_name %BASENAME%"
 
     addSystem "arcade"
     addSystem "$system"
