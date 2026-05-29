@@ -10,13 +10,13 @@
 #
 
 # ============================================================================
-# IvarArcade modification — mapdevice duplicate-ID fix
+# IvarArcade modification — MAME build compatibility fixes
 # Upstream: https://github.com/RetroPie/RetroPie-Setup/blob/master/scriptmodules/emulators/mame.sh
 # Patch reference: IvarArcade/docs/mame-mapdevice-duplicate-id-fix.md
 #
 # Changes vs upstream:
-#   1. sources_mame(): after gitPullOrClone, applies the two-line mapdevice fix
-#      via sed, prints a summary, then pauses for your verification before the build.
+#   1. sources_mame(): after gitPullOrClone, applies the mapdevice fix,
+#      prints a summary, then pauses for your verification before the build.
 #   2. install_mame(): after copying build artifacts, saves the two patched source
 #      files to /home/danc/mame-src-patched/ for future reference.
 #   3. __keep_sources=1: tells RetroPie-Setup NOT to delete the build directory
@@ -105,7 +105,7 @@ function depends_mame() {
     # Note: libxi-dev is required as of v0.210, because of flag changes for XInput
     local depends=(libfontconfig1-dev libsdl2-ttf-dev libflac-dev libxinerama-dev libxi-dev libpulse-dev)
     # current MAME uses Qt 6 for the optional debugger on desktop/X11 builds
-    isPlatform "x11" && depends+=(qt6-base-dev qt6-base-dev-tools qtchooser)
+    isPlatform "x11" && depends+=(qt6-base-dev qt6-base-dev-tools qmake6 qtchooser)
 
     getDepends "${depends[@]}"
 }
@@ -237,6 +237,12 @@ function build_mame() {
 
     # array for storing ARCHOPTS_CXX parameters
     local arch_opts_cxx=()
+
+    # Newer MAME releases use char8_t/u8string_view and heterogeneous lookup
+    # helpers that require C++20. Upstream Genie already requests this, but pass
+    # it here as well so RetroPie wrapper builds remain stable across distro /
+    # toolchain changes and stale local overrides.
+    arch_opts_cxx+=(-std=c++20)
 
     # when building on ARM enable 'fsigned-char' for compiled code, fixes crashes in a few drivers
     isPlatform "arm" || isPlatform "aarch64" && arch_opts_cxx+=(-fsigned-char)
