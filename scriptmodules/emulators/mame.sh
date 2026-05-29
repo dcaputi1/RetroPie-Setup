@@ -92,8 +92,8 @@ function _ivar_mame_normalize_binary() {
 }
 
 function _get_branch_mame() {
-    # starting with 0.265, GCC 10.3 or later is required for full C++17 support
-    if compareVersions "$(gcc -dumpfullversion)" lt 10.3.0; then
+    # current MAME releases require a C++20-capable toolchain; GCC 11+ is supported
+    if compareVersions "$(gcc -dumpfullversion)" lt 11; then
         echo "mame0264"
         return
     fi
@@ -104,8 +104,8 @@ function depends_mame() {
     # Install required libraries required for compilation and running
     # Note: libxi-dev is required as of v0.210, because of flag changes for XInput
     local depends=(libfontconfig1-dev libsdl2-ttf-dev libflac-dev libxinerama-dev libxi-dev libpulse-dev)
-    # build the MAME debugger only on X11 (desktop) platforms
-    isPlatform "x11" && depends+=(qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools)
+    # current MAME uses Qt 6 for the optional debugger on desktop/X11 builds
+    isPlatform "x11" && depends+=(qt6-base-dev qt6-base-dev-tools qtchooser)
 
     getDepends "${depends[@]}"
 }
@@ -231,7 +231,7 @@ function build_mame() {
         rpSwap on 8192
     fi
 
-    local params=(NOWERROR=1 ARCHOPTS="-U_FORTIFY_SOURCE -Wl,-s" PYTHON_EXECUTABLE=python3 OPTIMIZE=2 USE_SYSTEM_LIB_FLAC=1)
+    local params=(NOWERROR=1 REGENIE=1 ARCHOPTS="-U_FORTIFY_SOURCE -Wl,-s" PYTHON_EXECUTABLE=python3 OPTIMIZE=2 USE_SYSTEM_LIB_FLAC=1)
     [[ "$profile" == "arcade" ]] && params+=(SUBTARGET=arcade)
     isPlatform "x11" && params+=(USE_QTDEBUG=1) || params+=(USE_QTDEBUG=0)
 
@@ -272,7 +272,7 @@ function build_mame() {
     else
         (
             set -o pipefail
-            QT_SELECT=5 make "${params[@]}" 2>&1 | tee "$build_log"
+            make "${params[@]}" 2>&1 | tee "$build_log"
         )
         build_rc=$?
     fi
