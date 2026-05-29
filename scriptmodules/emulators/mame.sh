@@ -148,14 +148,16 @@ function sources_mame() {
 
     # -- Change 2: src/emu/ioport.cpp -------------------------------------
     local ioport_cpp="$md_build/src/emu/ioport.cpp"
-    if grep -q "devicemap\.emplace(devicename, controllername)" "$ioport_cpp"; then
-        sed -i \
-            's/devicemap\.emplace(devicename, controllername);/devicemap.emplace_back(devicename, controllername);/' \
+    if grep -q "devicemap\.emplace_back(devicename, controllername)" "$ioport_cpp"; then
+        echo "  [OK] src/emu/ioport.cpp: devicemap already uses emplace_back()"
+    elif grep -Eq 'devicemap[[:space:]]*\.[[:space:]]*emplace[[:space:]]*\([[:space:]]*devicename[[:space:]]*,[[:space:]]*controllername[[:space:]]*\)[[:space:]]*;' "$ioport_cpp"; then
+        sed -E -i \
+            's/devicemap[[:space:]]*\.[[:space:]]*emplace[[:space:]]*\(([[:space:]]*devicename[[:space:]]*,[[:space:]]*controllername[[:space:]]*)\)[[:space:]]*;/devicemap.emplace_back(\1);/' \
             "$ioport_cpp"
         echo "  [OK] src/emu/ioport.cpp: devicemap.emplace() -> emplace_back()"
     else
         echo "  [!!] src/emu/ioport.cpp: PATTERN NOT FOUND — automatic patch skipped!"
-        echo "       Expected line:  devicemap.emplace(devicename, controllername);"
+        echo "       Expected expression: devicemap.emplace(devicename, controllername);"
         echo "       Apply manually: $ioport_cpp"
         patch_ok=0
     fi
