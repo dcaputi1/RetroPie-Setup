@@ -58,6 +58,39 @@ function _ivar_mame_binary() {
     [[ "$profile" == "full" ]] && echo "mame" || echo "mamearcade"
 }
 
+function _ivar_mame_binary_path() {
+    local binary_name="$1"
+    local candidate
+
+    if [[ -x "$md_build/$binary_name" ]]; then
+        echo "$md_build/$binary_name"
+        return 0
+    fi
+
+    while IFS= read -r candidate; do
+        [[ -x "$candidate" ]] || continue
+        echo "$candidate"
+        return 0
+    done < <(find "$md_build/build" -type f -name "$binary_name" 2> /dev/null)
+
+    return 1
+}
+
+function _ivar_mame_normalize_binary() {
+    local binary_name="$1"
+    local binary_path
+
+    binary_path="$(_ivar_mame_binary_path "$binary_name")" || return 1
+
+    if [[ "$binary_path" != "$md_build/$binary_name" ]]; then
+        cp "$binary_path" "$md_build/$binary_name"
+        chmod +x "$md_build/$binary_name"
+        echo "Normalized MAME binary from $binary_path to $md_build/$binary_name" >&2
+    fi
+
+    echo "$md_build/$binary_name"
+}
+
 function _get_branch_mame() {
     # starting with 0.265, GCC 10.3 or later is required for full C++17 support
     if compareVersions "$(gcc -dumpfullversion)" lt 10.3.0; then
@@ -183,6 +216,7 @@ function sources_mame() {
 function build_mame() {
     local profile
     local binary_name
+    local binary_path
     local build_log
     local build_rc=0
 
@@ -253,7 +287,15 @@ function build_mame() {
         return "$build_rc"
     fi
 
-    md_ret_require="$md_build/$binary_name"
+    binary_path="$(_ivar_mame_normalize_binary "$binary_name")" || {
+        echo "MAME build completed, but '$binary_name' was not found under $md_build or $md_build/build." >&2
+        echo "Check these locations for the final executable:" >&2
+        echo "  $md_build/$binary_name" >&2
+        echo "  $md_build/build/projects" >&2
+        return 1
+    }
+
+    md_ret_require="$binary_path"
 }
 
 function install_mame() {
