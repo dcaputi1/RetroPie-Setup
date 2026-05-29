@@ -270,6 +270,7 @@ function rp_callModule() {
     local md_ret_info=()
 
     local action
+    local function_rc=0
     local pushed=1
     case "$mode" in
         depends)
@@ -340,6 +341,7 @@ function rp_callModule() {
             fi
             mkdir -p "$md_inst"
             "$function" "$@"
+            function_rc=$?
             ;;
         install_bin)
             if fnExists "install_bin_${md_id}"; then
@@ -358,8 +360,13 @@ function rp_callModule() {
         *)
             # call the function with parameters
             "$function" "$@"
+            function_rc=$?
             ;;
     esac
+
+    if [[ "$function_rc" -ne 0 ]]; then
+        md_ret_errors+=("Could not successfully $mode $md_id - $md_desc (exit code $function_rc).")
+    fi
 
     # check if any required files are found
     if [[ -n "$md_ret_require" ]]; then
