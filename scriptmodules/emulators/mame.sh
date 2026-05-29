@@ -181,9 +181,12 @@ function sources_mame() {
 function build_mame() {
     local profile
     local binary_name
+    local build_log
+    local build_rc=0
 
     profile="$(_ivar_mame_profile)" || return 1
     binary_name="$(_ivar_mame_binary)" || return 1
+    build_log="$md_build/build-$binary_name.log"
 
     # More memory is required for 64bit platforms
     if isPlatform "64bit"; then
@@ -219,14 +222,35 @@ function build_mame() {
     # force arm on arm platform - fixes building mame on when using 32bit arm userland with aarch64 kernel
     isPlatform "arm" && params+=(PLATFORM=arm)
 
+    printHeading "IvarArcade: building '$binary_name' (profile '$profile')"
+    echo "  Build log: $build_log"
+
     # workaround for linker crash on bullseye (use gold linker)
     if [[ "$__os_debian_ver" -eq 11 ]] && isPlatform "arm"; then
-        LDFLAGS+=" -fuse-ld=gold -Wl,--long-plt" make "${params[@]}"
+        (
+            set -o pipefail
+            LDFLAGS="$LDFLAGS -fuse-ld=gold -Wl,--long-plt" \
+                make "${params[@]}" 2>&1 | tee "$build_log"
+        )
+        build_rc=$?
     else
-        QT_SELECT=5 make "${params[@]}"
+        (
+            set -o pipefail
+            QT_SELECT=5 make "${params[@]}" 2>&1 | tee "$build_log"
+        )
+        build_rc=$?
     fi
 
     rpSwap off
+
+    if [[ "$build_rc" -ne 0 ]]; then
+        echo "MAME build failed with exit code $build_rc." >&2
+        echo "See full log: $build_log" >&2
+        echo "Last 40 lines from the build log:" >&2
+        tail -n 40 "$build_log" >&2
+        return "$build_rc"
+    fi
+
     md_ret_require="$md_build/$binary_name"
 }
 
