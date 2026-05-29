@@ -300,8 +300,13 @@ function build_mame() {
 
 function install_mame() {
     local binary_name
+    local binary_path
 
     binary_name="$(_ivar_mame_binary)" || return 1
+    binary_path="$(_ivar_mame_normalize_binary "$binary_name")" || {
+        echo "Install step could not locate '$binary_name' under $md_build or $md_build/build." >&2
+        return 1
+    }
 
     md_ret_files=(
         'artwork'
