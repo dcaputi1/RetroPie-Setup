@@ -22,14 +22,17 @@
 #   3. __keep_sources=1: tells RetroPie-Setup NOT to delete the build directory
 #      after install, leaving the full MAME source tree in place.
 #   4. IVAR_MAME_PROFILE=full|arcade selects whether to build the full MAME
-#      target or the stripped-down arcade-only target. Defaults to arcade.
+#      target or the stripped-down arcade-only target. Defaults to full.
+#   5. The default source repo/branch target the IvarArcade MAME PR branch,
+#      but IVAR_MAME_REPO_URL / IVAR_MAME_REPO_BRANCH / IVAR_MAME_REPO_COMMIT
+#      can still override that for ad-hoc testing.
 # ============================================================================
 
 rp_module_id="mame"
 rp_module_desc="MAME emulator"
-rp_module_help="ROM Extensions: .zip .7z\n\nCopy your MAME roms to either $romdir/mame or\n$romdir/arcade"
+rp_module_help="ROM Extensions: .zip .7z\n\nCopy your MAME roms to either $romdir/mame or\n$romdir/arcade\n\nDefault source: https://github.com/dcaputi1/mame.git (branch: mapdevice-duplicate-id-fix)\nDefault profile: full\n\nOptional source overrides:\nIVAR_MAME_REPO_URL=https://github.com/<you>/mame.git\nIVAR_MAME_REPO_BRANCH=<branch>\nIVAR_MAME_REPO_COMMIT=<commit>\nIVAR_MAME_PROFILE=full|arcade"
 rp_module_licence="GPL2 https://raw.githubusercontent.com/mamedev/mame/master/COPYING"
-rp_module_repo="git https://github.com/mamedev/mame.git :_get_branch_mame"
+rp_module_repo="git :_ivar_mame_repo_url :_ivar_mame_repo_branch :_ivar_mame_repo_commit"
 rp_module_section="exp"
 rp_module_flags="!mali !armv6 !:\$__gcc_version:-lt:7 nodistcc"
 
@@ -38,7 +41,7 @@ rp_module_flags="!mali !armv6 !:\$__gcc_version:-lt:7 nodistcc"
 __keep_sources=1
 
 function _ivar_mame_profile() {
-    local profile="${IVAR_MAME_PROFILE:-arcade}"
+    local profile="${IVAR_MAME_PROFILE:-full}"
 
     case "$profile" in
         full|arcade)
@@ -49,6 +52,42 @@ function _ivar_mame_profile() {
             return 1
             ;;
     esac
+}
+
+function _ivar_mame_repo_url() {
+    echo "${IVAR_MAME_REPO_URL:-https://github.com/dcaputi1/mame.git}"
+}
+
+function _ivar_mame_repo_branch() {
+    local branch
+
+    if [[ -n "$IVAR_MAME_REPO_BRANCH" ]]; then
+        echo "$IVAR_MAME_REPO_BRANCH"
+        return 0
+    fi
+
+    if [[ -z "$IVAR_MAME_REPO_URL" ]]; then
+        echo "mapdevice-duplicate-id-fix"
+        return 0
+    fi
+
+    branch=$(git ls-remote --symref --exit-code "$IVAR_MAME_REPO_URL" HEAD 2> /dev/null | grep -oP '.*/\K[^\t]+')
+
+    if [[ -n "$branch" ]]; then
+        echo "$branch"
+        return 0
+    fi
+
+    if git ls-remote --exit-code "$repo_url" refs/heads/main > /dev/null 2>&1; then
+        echo "main"
+        return 0
+    fi
+
+    echo "master"
+}
+
+function _ivar_mame_repo_commit() {
+    echo "$IVAR_MAME_REPO_COMMIT"
 }
 
 function _ivar_mame_binary() {
@@ -112,7 +151,14 @@ function depends_mame() {
 
 function sources_mame() {
     local profile
+    local repo_url
+    local repo_branch
+    local repo_commit
+
     profile="$(_ivar_mame_profile)" || return 1
+    repo_url="$(_ivar_mame_repo_url)" || return 1
+    repo_branch="$(_ivar_mame_repo_branch)" || return 1
+    repo_commit="$(_ivar_mame_repo_commit)" || return 1
 
     gitPullOrClone
     # lzma assumes hardware crc support on arm which breaks when building on armv7
@@ -124,6 +170,8 @@ function sources_mame() {
     fi
 
     printHeading "IvarArcade: building MAME profile '$profile'"
+    echo "  Source repo: $repo_url"
+    echo "  Source ref:  $repo_branch${repo_commit:+ @ $repo_commit}"
     if [[ "$profile" == "full" ]]; then
         echo "  [OK] using upstream arcade.flt and full MAME target"
     else
