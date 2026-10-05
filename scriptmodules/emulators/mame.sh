@@ -16,7 +16,7 @@
 #
 # Changes vs upstream:
 #   1. sources_mame(): after gitPullOrClone, applies the mapdevice fix,
-#      prints a summary, then pauses for your verification before the build.
+#      verifies both changes, and stops if either change cannot be applied.
 #   2. install_mame(): after copying build artifacts, saves the two patched source
 #      files to /home/danc/mame-src-patched/ for future reference.
 #   3. __keep_sources=1: tells RetroPie-Setup NOT to delete the build directory
@@ -246,19 +246,13 @@ function sources_mame() {
     echo ""
     echo "Source tree: $md_build"
     echo ""
-    echo "Verify the applied changes:"
-    echo "  grep -n 'devicemap_table' $input_h"
-    echo "  grep -n 'emplace_back'    $ioport_cpp"
-    echo ""
 
     if [[ "$patch_ok" -eq 0 ]]; then
-        echo "*** WARNING: one or more patches were NOT applied automatically. ***"
-        echo "    Apply them manually in $md_build/src/emu/ before continuing."
+        echo "*** ERROR: one or more patches were NOT applied automatically. ***"
+        echo "    Apply them manually in $md_build/src/emu/ before building."
         echo "    See IvarArcade/docs/mame-mapdevice-duplicate-id-fix.md for the exact changes."
-        echo ""
+        return 1
     fi
-
-    read -rp "Press Enter to start the build, or Ctrl+C to abort and fix manually... "
 }
 
 function build_mame() {
