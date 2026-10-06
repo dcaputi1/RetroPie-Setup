@@ -401,6 +401,11 @@ function configure_mame() {
         mkRomDir "arcade"
         mkRomDir "$system"
 
+        # Keep the stable executable path used by local launch scripts.
+        if [[ "$binary_name" != "mame" ]]; then
+            ln -sfn "$binary_name" "$md_inst/mame" || return 1
+        fi
+
         # Create required MAME directories underneath the ROM directory
         local mame_sub_dir
         for mame_sub_dir in artwork cfg comments diff inp nvram samples scores snap sta; do
